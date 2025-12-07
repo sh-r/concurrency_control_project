@@ -9,10 +9,10 @@ end(T2)
 end(T1)
 
 
-Expected Behavior:
-T1 reads x2 (old value).
-T2 later writes x2 and tries to commit first.
-T1 writes x4 and attempts to commit after T2.
-There is a potential RW-cycle (T1 → T2 via read of x2, and T2 → T1 via overlapping writes / snapshot timelines).
-"cycle detected"
-Either T1 or T2 is aborted to break the cycle.
+// Expected Behavior:
+// T1 reads x2 (old value).
+// T2 later writes x2 and tries to commit first.
+// T1 writes x4 and attempts to commit after T2.
+// There is a potential RW-cycle (T1 → T2 via read of x2, and T2 → T1 via overlapping writes / snapshot timelines).
+// "cycle detected"
+// Either T1 or T2 is aborted to break the cycle.

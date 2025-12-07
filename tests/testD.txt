@@ -1,0 +1,14 @@
+// Test D: Read-Your-Own-Write (RYOW)
+begin(T1)
+W(T1, x5, 99)
+R(T1, x5)
+end(T1)
+dump()
+
+// Expected behavior:
+// begin(T1) at time 1
+// W(T1, x5, 99) buffered
+// x5: 99                 <-- RYOW: must see its own buffered write
+// end(T1) at time 4
+// T1 commits
+// dump() should show x5 = 99 at site 6 (home of x5) and the original values elsewhere unchanged.
