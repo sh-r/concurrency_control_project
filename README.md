@@ -1,1 +1,2 @@
-# concurrency_control_project
+# replicated concurrency control project
+advanced dbms
