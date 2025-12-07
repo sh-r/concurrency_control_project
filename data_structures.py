@@ -15,7 +15,7 @@ class VariableHistory:
     versions: List[Version] = field(default_factory=list)
 
     def latest_before(self, ts: int) -> Optional[Version]:
-        best = None
+        best: Optional[Version] = None
         for v in self.versions:
             if v.commit_time <= ts and (best is None or v.commit_time > best.commit_time):
                 best = v
@@ -48,7 +48,7 @@ class Site:
 class Transaction:
     tid: str
     start_time: int
-    status: str = "active"
+    status: str = "active"  # "active", "committed", "aborted"
     read_vars: Set[str] = field(default_factory=set)
     write_buffer: Dict[str, int] = field(default_factory=dict)
     write_sites: Dict[str, Set[int]] = field(default_factory=dict)

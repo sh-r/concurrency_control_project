@@ -5,6 +5,22 @@ from typing import Dict, Set, List, Tuple, Optional
 from data_structures import Version, VariableHistory, Site, Transaction
 
 class RepCRec:
+    """
+    Replicated Concurrency and Recovery (RepCRec) transaction manager.
+
+    - Manages 20 variables x1..x20 across 10 sites.
+    - Odd-indexed variables have a single home site.
+    - Even-indexed variables are replicated at all sites.
+    - Implements:
+        * Available copies replication.
+        * Serializable Snapshot Isolation (SSI).
+        * First-committer-wins on write-write conflicts.
+        * Abort on write-site failures (available copies rule).
+        * SSI-style cycle detection using RW + WW edges.
+        * Snapshot-based read logic for replicated variables.
+        * Waiting + unblocking logic for reads under failures.
+    """
+
     def __init__(self):
         self.time = 0
         self.sites: Dict[int, Site] = {}
@@ -19,8 +35,10 @@ class RepCRec:
         # readers[var] = set of tids that have read var
         self.readers: Dict[str, Set[str]] = {}
 
-        # Blocked reads for snapshot-waiting (Test 25)
-        # tid -> (var, value, snapshot_sites)
+        # Blocked reads for snapshot-waiting (e.g., Test 25)
+        # tid -> (var, snapshot_value, snapshot_sites)
+        #   snapshot_value: value as of T.start_time
+        #   snapshot_sites: list of sites that had a valid snapshot at read time
         self.blocked_reads: Dict[str, Tuple[str, int, List[int]]] = {}
 
         self._init_sites_and_vars()
@@ -65,7 +83,12 @@ class RepCRec:
                 initial_sites.add(home)
 
             vh.versions.append(
-                Version(value=10 * i, commit_time=0, writer=None, sites=initial_sites)
+                Version(
+                    value=10 * i,
+                    commit_time=0,
+                    writer=None,
+                    sites=initial_sites,
+                )
             )
             self.vars[name] = vh
 
@@ -87,8 +110,8 @@ class RepCRec:
 
     def _build_conflict_graph(self, candidate_tid: str) -> Dict[str, Set[str]]:
         """
-        Build full conflict graph (RW + WW edges) for all non-aborted
-        transactions that are either already committed, or the candidate
+        Build conflict graph (RW + WW edges) for all non-aborted
+        transactions that are either already committed or the candidate
         transaction that is trying to commit now.
         """
         nodes: Set[str] = set()
@@ -194,17 +217,33 @@ class RepCRec:
         print(f"begin({tid}) at time {self.time}")
 
     def read(self, tid: str, var: str) -> None:
+        """
+        R(Ti, xj):
+        - Read-your-own-write (if Ti wrote xj).
+        - Otherwise, snapshot as of Ti.start_time.
+        - For replicated vars: enforce continuous uptime condition.
+        - For both replicated and unreplicated: may wait if no site currently usable.
+        """
         t = self._ensure_txn(tid)
         if t.status != "active":
             return
 
-        # If this txn currently has a blocked read, don't try again here
+        # If this txn currently has a blocked read, don't try again here.
+        # (Input scripts generally don't issue further operations on a waiting txn.)
         if tid in self.blocked_reads:
+            return
+
+        # --- Read-your-own-write (RYOW) ---
+        if var in t.write_buffer:
+            val = t.write_buffer[var]
+            print(f"{var}: {val}")
+            t.read_vars.add(var)
+            self.readers.setdefault(var, set()).add(tid)
             return
 
         idx = int(var[1:])
         vh = self.vars[var]
-        # snapshot version: latest version committed before or at T.start_time
+        # Snapshot version: latest version committed before or at T.start_time
         snap = vh.latest_before(t.start_time)
         if snap is None:
             print(f"{var}: read failed (no committed version)")
@@ -216,21 +255,23 @@ class RepCRec:
         if not self.is_replicated(idx):
             home = self.home_site_for_odd(idx)
             site = self.sites[home]
+            val = snap.value
+
             if not site.is_up:
+                # Spec: transaction should wait for an unreplicated item on a failed site.
+                self.blocked_reads[tid] = (var, val, [home])
                 print(f"{tid} waits because home site {home} for {var} is down")
-                t.status = "aborted"
-                print(f"{tid} aborts (home site {home} for {var} is down)")
                 return
+
             if home not in snap.sites:
                 print(f"{var}: read failed (snapshot not available at site {home})")
                 t.status = "aborted"
                 print(f"{tid} aborts (no snapshot for {var} at site {home})")
                 return
 
-            val = snap.value
+            print(f"{var}: {val}")
             t.read_vars.add(var)
             self.readers.setdefault(var, set()).add(tid)
-            print(f"{var}: {val}")
             return
 
         # case 2: replicated (even index) with snapshot + waiting logic
@@ -258,10 +299,10 @@ class RepCRec:
         if up_readable_sites:
             # we can read immediately
             chosen_site = up_readable_sites[0]
-            _ = chosen_site  # unused but kept for clarity
+            _ = chosen_site  # for clarity
+            print(f"{var}: {candidate_val}")
             t.read_vars.add(var)
             self.readers.setdefault(var, set()).add(tid)
-            print(f"{var}: {candidate_val}")
             return
 
         # snapshot exists but no currently up readable site -> T must wait (Test 25)
@@ -269,6 +310,7 @@ class RepCRec:
         print(f"{tid} waits because no site is currently up for snapshot of {var}")
 
     def write(self, tid: str, var: str, value: int) -> None:
+        """W(Ti, xj, v): buffer write to all currently up sites holding xj."""
         t = self._ensure_txn(tid)
         if t.status != "active":
             return
@@ -311,6 +353,7 @@ class RepCRec:
         print(f"W({tid}, {var}, {value}) buffered")
 
     def end(self, tid: str) -> None:
+        """end(Ti): try to commit, may abort due to failures or SSI conflicts."""
         t = self._ensure_txn(tid)
         print(f"end({tid}) at time {self.time}")
 
@@ -318,7 +361,7 @@ class RepCRec:
             print(f"{tid} aborts")
             return
 
-        # 1) Available copies abort rule:
+        # 1) Available copies abort rule: any write-site that failed after write?
         for sid, wtime in t.site_write_times.items():
             site = self.sites[sid]
             for f in site.failure_times:
@@ -327,7 +370,7 @@ class RepCRec:
                     print(f"{tid} aborts (site {sid} failed after write)")
                     return
 
-        # 2) First-committer-wins (write-write conflicts):
+        # 2) First-committer-wins (write-write conflicts)
         for var in t.write_buffer:
             if var in self.var_last_writer:
                 other_tid, other_ctime = self.var_last_writer[var]
@@ -361,7 +404,12 @@ class RepCRec:
             # update version history
             vh = self.vars[var]
             vh.versions.append(
-                Version(value=val, commit_time=self.time, writer=tid, sites=committed_sites)
+                Version(
+                    value=val,
+                    commit_time=self.time,
+                    writer=tid,
+                    sites=committed_sites,
+                )
             )
             self.var_last_writer[var] = (tid, self.time)
 
@@ -369,14 +417,27 @@ class RepCRec:
         print(f"{tid} commits")
 
     def fail(self, site_id: int) -> None:
+        """fail(i): mark site i down and record failure time."""
         site = self.sites.get(site_id)
         if not site:
             return
         site.fail(self.time)
-        # blocked reads remain blocked until some recovery allows them
+        # Blocked reads remain blocked until some recovery allows them
 
     def _try_unblock_reads(self) -> None:
-        """After a recovery, see if any blocked reads can now be satisfied."""
+        """
+        After a recovery, see if any blocked reads can now be satisfied.
+
+        Important subtlety:
+        - For blocked snapshot reads, we already froze:
+            * the snapshot value (as of T.start_time)
+            * the eligible snapshot_sites (continuous uptime up to T.start_time)
+        - Spec's "read gate" for replicated vars applies only to **transactions
+          that begin after recovery**.
+        - All blocked reads here come from transactions that began *before*
+          the recovery, so they may use the snapshot even if can_read[var]
+          is False on a recovered site.
+        """
         to_remove: List[str] = []
         for tid, (var, val, snapshot_sites) in list(self.blocked_reads.items()):
             t = self.txns.get(tid)
@@ -385,8 +446,8 @@ class RepCRec:
                 continue
             for sid in snapshot_sites:
                 site = self.sites[sid]
-                if site.is_up and site.can_read.get(var, True):
-                    # complete the read now
+                # For blocked snapshot reads, we only require the site to be up now.
+                if site.is_up:
                     print(f"{var}: {val}")
                     t.read_vars.add(var)
                     self.readers.setdefault(var, set()).add(tid)
@@ -396,6 +457,12 @@ class RepCRec:
             del self.blocked_reads[tid]
 
     def recover(self, site_id: int) -> None:
+        """
+        recover(i): bring site i back up.
+        - Odd vars: immediately readable.
+        - Even vars: readable only if this site has the latest committed version;
+                     otherwise gate stays closed until a new commit writes here.
+        """
         site = self.sites.get(site_id)
         if not site:
             return
@@ -415,12 +482,14 @@ class RepCRec:
                 else:
                     site.can_read[var_name] = False
 
-        # Some blocked reads might now be satisfiable (Test 25)
+        # Some blocked reads might now be satisfiable (e.g., Test 25)
         self._try_unblock_reads()
 
     def dump(self) -> None:
-        # print committed values of all copies of all variables at all sites,
-        # sorted by site, and within a site by variable index ascending.
+        """
+        dump(): print committed values of all copies of all variables at all sites,
+        sorted by site and then by variable index ascending.
+        """
         for sid in sorted(self.sites.keys()):
             site = self.sites[sid]
             parts = []
@@ -433,7 +502,11 @@ class RepCRec:
     # -------------
 
     def execute_line(self, line: str) -> None:
-        # Strip leading/trailing whitespace
+        """
+        Parse and execute a single line of input.
+        - Ignores blank lines and comment-only lines.
+        - Each real command advances global time by 1.
+        """
         line = line.strip()
         if not line:
             return
@@ -444,14 +517,16 @@ class RepCRec:
             if not line:
                 return
 
-        # Ignore explanation / expected-output lines like "=== ..."
-        if not (line.startswith("begin(") or
-                line.startswith("R(") or
-                line.startswith("W(") or
-                line.startswith("end(") or
-                line.startswith("fail(") or
-                line.startswith("recover(") or
-                line == "dump()"):
+        # Ignore non-command lines (e.g., explanations or expected-output text)
+        if not (
+            line.startswith("begin(")
+            or line.startswith("R(")
+            or line.startswith("W(")
+            or line.startswith("end(")
+            or line.startswith("fail(")
+            or line.startswith("recover(")
+            or line == "dump()"
+        ):
             return
 
         # Each real command advances global time by 1
