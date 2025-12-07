@@ -1,0 +1,8 @@
+Your biggest operations took:
+
+23.79 seconds → myfriendlikes
+24.45 seconds → myfrienddislikes
+10.5 seconds → friends_dislike_artist
+6.1 seconds → ishouldlike
+
+Everything summed ≈ 86 seconds.

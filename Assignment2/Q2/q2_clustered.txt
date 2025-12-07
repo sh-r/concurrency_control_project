@@ -1,0 +1,134 @@
+Experiment 2 — MySQL (Clustered vs Non-Clustered vs No Index)
+Dataset: 100,000 rows
+Table design:
+ssnum is the clustered index (PRIMARY KEY).
+range_uniform is a uniformly scrambled version of ssnum.
+range_skew is a skewed integer (0..100).
+hot_col is a hotspot column: 1 for ~10% of rows, otherwise = ssnum.
+
+
+##########################
+# MySQL
+##########################
+
+S1: Range Query (Uniform Distribution) -> Query: ssnum BETWEEN 10000 AND 20000
+
+Index Type	Duration (sec)
+Clustered (ssnum)	0.00330
+Non-clustered index (range_uniform)	0.00299
+No Index	0.02128
+
+Conclusion (S1):
+Clustered and nonclustered have similar performance on uniform ranges.
+No index is 7× slower.
+The rule “clustered index helps range scans” is WEAK in uniform distribution.
+
+
+S2: Point Query (Uniform Distribution) -> Query: ssnum = 50000
+
+Index Type	Duration (sec)
+Clustered	0.000175
+Nonclustered	0.000267
+No Index	0.02047
+
+Conclusion (S2):
+Clustered ≈ nonclustered (both extremely fast).
+No index is 120× slower.
+Point queries do not benefit from clustering → rule is WEAK here also.
+
+
+S3: Range Query on Skewed Distribution (range_skew)
+
+Scenario	Query	Time (sec)	Index Type
+S3-Indexed	range_skew BETWEEN 10 AND 20	0.00345	Secondary index
+S3-NoIndex	range_skew BETWEEN 10 AND 20	0.03432	No index
+
+Key result:
+Index is 10× faster even on a skewed distribution.
+But compared to uniform distribution, the benefit is smaller because the index returns many rows per key, causing more leaf-page lookups.
+
+
+S4: Multipoint Hotspot Query (hot_col = 1)
+
+Scenario	Query	Time (sec)	Index Type
+S4-Indexed	hot_col = 1	0.00238	Secondary index
+S4-NoIndex	hot_col = 1	0.02234	No index
+
+Key result:
+Index is 9× faster for multipoint hotspot access.
+But clustering on ssnum is irrelevant → hotspot column is not clustered.
+You observe a moderate improvement, much smaller than uniform-point lookup (120×!).
+This demonstrates a case where the clustered-index rule is “NOT strongly satisfied.”
+
+
+##########################
+# PostGRES
+##########################
+
+Dataset: 100,000 rows
+Table design: ssnum plays the role of the “clustered-like” column.
+Synthetic columns mirror MySQL:
+range_uniform → uniform distribution
+range_skew → skewed distribution
+hot_col → hotspot distribution
+
+
+
+S1 — Range Query (Uniform Distribution)
+
+Query: BETWEEN 10000 AND 20000
+Rows returned ≈ 10,001
+
+Index Type	Query	Time
+Clustered-like (index on ssnum)	ssnum BETWEEN 10000 AND 20000	4.006 ms
+Nonclustered (index on range_uniform)	range_uniform BETWEEN 10000 AND 20000	2.101 ms
+No Index (range_uniform)	range_uniform BETWEEN 10000 AND 20000	8.913 ms
+
+Conclusion (S1 — uniform range)
+Nonclustered index is faster than clustered-like (2.1 ms vs 4.0 ms).
+No index is ~4× slower than indexed scans.
+Therefore, the clustering advantage is weak under uniform distribution — same pattern as MySQL.
+
+
+S2 — Point Query (Uniform Distribution)
+Query: = 50000
+
+Index Type	Query	Time
+Clustered-like	ssnum = 50000	1.588 ms
+Nonclustered	range_uniform = 50000	0.185 ms
+No Index	range_uniform = 50000	7.962 ms
+
+Conclusion (S2 — uniform point query)
+Indexed point lookups are extremely fast regardless of index type → clustering is irrelevant, same as MySQL.
+Nonclustered slightly wins here.
+No index is ~40× slower.
+
+
+S3 — Range Query (Skewed Distribution)
+
+Query: range_skew BETWEEN 10 AND 20
+Rows returned = 11,000
+
+Scenario	Time
+Indexed (range_skew)	2.595 ms
+No Index	9.568 ms
+
+Conclusion (S3 — skewed)
+Index improves performance ~4×.
+But improvement is smaller than uniform distribution, because the skew means each index key hits many rows → more leaf pages.
+This matches the paper’s claim: clustering/indexing is less effective under skew.
+
+
+S4 — Hotspot Multipoint Query
+
+Query: hot_col = 1
+Rows returned = 10,001
+
+Scenario	Time
+Indexed (hot_col)	3.701 ms
+No Index	8.772 ms
+
+Conclusion (S4 — hotspot)
+Index is ~2.3× faster — an improvement, but not huge.
+Clustering on ssnum does not help at all (hot_col is unrelated).
+Same outcome as MySQL → clustering rule is weak for hotspots.

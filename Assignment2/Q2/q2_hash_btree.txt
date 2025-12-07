@@ -1,0 +1,123 @@
+###################
+EXPERIMENTS
+###################
+For MySQL + hash vs B+Tree, we have the following experiments:
+M1: multipoint, current distribution 
+-> SQL: hash shines, 4x faster, and diff conc than the paper
+M2: point, current distribution 
+-> SQL: both equivalent
+M3: Range query on ssnum 
+-> SQL: strong B+Tree case as Hash does full scan and doesn't support range on mysql
+M4: Range query on dept_id
+-> SQL: Same story as M3 on a different column. Reinforces “B+tree is the correct choice when you ever need ranges.”
+
+That’s 4 distinct MySQL scenarios (pairs) for the Hash vs B+Tree knob, satisfying the assignment.
+Access patterns: equality multipoint, equality point, 2× range.
+Columns: one low-card (dept_id), one high-card (ssnum).
+Behavior: in some, Hash wins; in some, B+tree dominates; in some, they tie.
+
+
+
+###############################################
+# MySQL
+###############################################
+
+In 1st ternminal:
+/home/sr7463/mysql/mysql8/bin/mysqld   \
+  --datadir=/home/sr7463/mysql/mysql_data   \
+  --socket=/home/sr7463/mysql/mysql.sock   \
+  --port=3306   \
+  --local-infile=1 &
+
+In 2nd terminal:
+/home/sr7463/mysql/mysql8/bin/mysql \
+  --socket=/home/sr7463/mysql/mysql.sock \
+  -u root -p \
+  --local-infile=1
+
+This is the method to open the mysql server you can access through terminal 2
+
+###############
+RESULTS
+###############
+
+Multipoint query (equality on dept_id) ----> SELECT * FROM employees_mem WHERE dept_id = 1
+BTree table: 0.00031150
+Hash table: 0.00007900 → 4x faster
+
+Point query (equality on ssnum) ----> SELECT * FROM employees_mem WHERE ssnum = 15000
+BTREE: 0.00006050 s
+HASH: 0.00005850 s → basically identical
+
+Range query (equality on ssnum)
+BTREE: 0.00234125 s
+HASH: 0.00508250 s -> BTREE like 2x faster
+
+Range query (equality on dept_id)
+BTREE: 0.00029650 | SELECT * FROM employees_mem WHERE dept_id BETWEEN 1 AND 100
+HASH: 0.00406225 | SELECT * FROM employees_mem WHERE dept_id BETWEEN 1 AND 100 -> BTREE 13x faster
+
+##################
+EXPLANATION
+##################
+
+1. Using:
+employees_full (InnoDB, 10⁵ rows from employeesindex_10_5.csv)
+dept_map (string dept → integer dept_id)
+employees_mem (MEMORY, 10⁵ rows, (ssnum INT, dept_id INT))
+
+For MySQL + 10⁵ rows:
+
+Multipoint (dept_id)
+HASH ≈ 4× faster than BTREE
+⇒ rule “BTREE is always at least as good” is violated / weak here.
+
+Point (ssnum)
+HASH ≈ BTREE
+⇒ matches the paper’s observation that BTREE ≈ HASH for point queries.
+
+On MySQL with 10⁵ rows, using a MEMORY table indexed by an integer-coded department (dept_id), 
+we find that for multipoint equality queries, a HASH index outperforms a 
+BTREE index by roughly 4×. This contradicts or at least weakens the 
+paper’s general conclusion that B+ trees are always as good as hash indexes. 
+However, for point queries on a unique key (ssnum), both BTREE and HASH 
+indexes show nearly identical performance, in line with the paper’s conclusion.
+
+
+
+
+###############################################
+# PostGRES
+###############################################
+
+cd /home/sr7463
+pg_ctl -D /home/sr7463/pgsql/data \
+  -o "-p 10001 -k /home/sr7463/pgsql/data/run" \
+  -l /home/sr7463/pgsql/logfile \
+  start
+
+psql -h /home/sr7463/pgsql/data/run -p 10001 -U sr7463 -d employees_index -f q2_hash_btree_postgres.sql
+
+###############
+RESULTS
+###############
+
+P1 — Multipoint equality (hundreds1 = 100)
+Index	Time (ms)
+BTREE	7.412 ms
+HASH	1.803 ms -> Hash is ~4× faster, perfect match to your MySQL behavior.
+
+P2 — Point equality (ssnum = 15000)
+Index	Time (ms)
+BTREE	2.015 ms
+HASH	1.658 ms -> Nearly identical matches paper & MySQL.
+
+P3 — Range query (ssnum BETWEEN 10000 AND 20000)
+Index	Time (ms)
+BTREE	3.116 ms
+HASH	8.445 ms -> BTREE ~2.7× faster, exactly as expected.
+
+P4 — Range query (hundreds1 BETWEEN 100 AND 200)
+Index	Time (ms)
+BTREE	2.869 ms
+HASH	11.320 ms -> BTREE ~4× faster → very strong case for BTREE on ranges.

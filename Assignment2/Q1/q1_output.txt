@@ -1,0 +1,198 @@
+Reading trades from trades_10M.csv ...
+Loaded DataFrame with shape (10000000, 4) in 6.34 s
+  stocksymbol  time  quantity  price
+0      s32560     1       638    278
+1      s29132     2      9555    173
+2      s21728     3      9405    234
+3      s66013     4      4560    123
+4      s50168     5      1652    417
+
+=== (a) Weighted average price per stock ===
+(a) done in 1.55 s
+Head:
+             weighted_avg_price
+stocksymbol                    
+s1                   483.143224
+s10                  312.552130
+s100                 424.760965
+s1000                418.016948
+s10000                92.885063
+
+=== (b) 10-trade unweighted moving averages ===
+(b) done in 17.22 s
+Head:
+        stocksymbol     time  price  ma_unweighted
+27074            s1    27075    481     481.000000
+199464           s1   199465    479     480.000000
+389331           s1   389332    484     481.333333
+464279           s1   464280    485     482.250000
+498745           s1   498746    489     483.600000
+649241           s1   649242    493     485.166667
+684429           s1   684430    489     485.714286
+921361           s1   921362    491     486.375000
+1317643          s1  1317644    494     487.222222
+1392061          s1  1392062    496     488.100000
+
+=== (c) 10-trade weighted moving averages ===
+(c) done in 14.37 s
+Head:
+        stocksymbol     time  price  quantity  ma_weighted
+27074            s1    27075    481      4494   481.000000
+199464           s1   199465    479      3297   480.153639
+389331           s1   389332    484      5606   481.763156
+464279           s1   464280    485      5312   482.682185
+498745           s1   498746    489      6419   484.296084
+649241           s1   649242    493      7914   486.380788
+684429           s1   684430    489       992   486.457131
+921361           s1   921362    491      3338   486.862892
+1317643          s1  1317644    494      6112   487.866066
+1392061          s1  1392062    496      9825   489.365173
+
+=== (d) Best buy-first/sell-later trade per stock ===
+/home/sr7463/Q1/analyze_trades.py:167: FutureWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  result = tmp.groupby("stocksymbol").apply(best_trade_for_stock)
+(d) done in 28.62 s
+Head:
+  stocksymbol  max_profit   buy_time  sell_time  buy_price  sell_price
+0          s1        19.0   199465.0  2854676.0      479.0       498.0
+1         s10        47.0    13296.0  2190025.0      313.0       360.0
+2        s100        33.0  2362013.0  9009249.0      407.0       440.0
+3       s1000        21.0   681498.0  3399711.0      410.0       431.0
+4      s10000        29.0  8659511.0  9961877.0       50.0        79.0
+[sr7463@access1 Q1]$ [200~script q1_output.txt
+bash: [200~script: command not found
+[sr7463@access1 Q1]$ script q1_output.txt
+Script started, output log file is 'q1_output.txt'.
+[sr7463@access1 Q1]$ python analyze_trades.py
+Reading trades from trades_10M.csv ...
+Loaded DataFrame with shape (10000000, 4) in 4.22 s
+  stocksymbol  time  quantity  price
+0      s32560     1       638    278
+1      s29132     2      9555    173
+2      s21728     3      9405    234
+3      s66013     4      4560    123
+4      s50168     5      1652    417
+
+=== (a) Weighted average price per stock ===
+(a) done in 1.46 s
+Head:
+             weighted_avg_price
+stocksymbol                    
+s1                   483.143224
+s10                  312.552130
+s100                 424.760965
+s1000                418.016948
+s10000                92.885063
+
+=== (b) 10-trade unweighted moving averages ===
+(b) done in 17.63 s
+Head:
+        stocksymbol     time  price  ma_unweighted
+27074            s1    27075    481     481.000000
+199464           s1   199465    479     480.000000
+389331           s1   389332    484     481.333333
+464279           s1   464280    485     482.250000
+498745           s1   498746    489     483.600000
+649241           s1   649242    493     485.166667
+684429           s1   684430    489     485.714286
+921361           s1   921362    491     486.375000
+1317643          s1  1317644    494     487.222222
+1392061          s1  1392062    496     488.100000
+
+=== (c) 10-trade weighted moving averages ===
+(c) done in 15.70 s
+Head:
+        stocksymbol     time  price  quantity  ma_weighted
+27074            s1    27075    481      4494   481.000000
+199464           s1   199465    479      3297   480.153639
+389331           s1   389332    484      5606   481.763156
+464279           s1   464280    485      5312   482.682185
+498745           s1   498746    489      6419   484.296084
+649241           s1   649242    493      7914   486.380788
+684429           s1   684430    489       992   486.457131
+921361           s1   921362    491      3338   486.862892
+1317643          s1  1317644    494      6112   487.866066
+1392061          s1  1392062    496      9825   489.365173
+
+=== (d) Best buy-first/sell-later trade per stock ===
+/home/sr7463/Q1/analyze_trades.py:167: FutureWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  result = tmp.groupby("stocksymbol").apply(best_trade_for_stock)
+(d) done in 28.49 s
+Head:
+  stocksymbol  max_profit   buy_time  sell_time  buy_price  sell_price
+0          s1        19.0   199465.0  2854676.0      479.0       498.0
+1         s10        47.0    13296.0  2190025.0      313.0       360.0
+2        s100        33.0  2362013.0  9009249.0      407.0       440.0
+3       s1000        21.0   681498.0  3399711.0      410.0       431.0
+4      s10000        29.0  8659511.0  9961877.0       50.0        79.0
+[sr7463@access1 Q1]$ exit
+exit
+Script done.
+[sr7463@access1 Q1]$ cat q1_output.txt 
+Script started on 2025-11-21 01:06:18-05:00 [TERM="xterm-256color" TTY="/dev/pts/5" COLUMNS="80" LINES="24"]
+[sr7463@access1 Q1]$ python analyze_trades.py
+Reading trades from trades_10M.csv ...
+Loaded DataFrame with shape (10000000, 4) in 4.22 s
+  stocksymbol  time  quantity  price
+0      s32560     1       638    278
+1      s29132     2      9555    173
+2      s21728     3      9405    234
+3      s66013     4      4560    123
+4      s50168     5      1652    417
+
+=== (a) Weighted average price per stock ===
+(a) done in 1.46 s
+Head:
+             weighted_avg_price
+stocksymbol                    
+s1                   483.143224
+s10                  312.552130
+s100                 424.760965
+s1000                418.016948
+s10000                92.885063
+
+=== (b) 10-trade unweighted moving averages ===
+(b) done in 17.63 s
+Head:
+        stocksymbol     time  price  ma_unweighted
+27074            s1    27075    481     481.000000
+199464           s1   199465    479     480.000000
+389331           s1   389332    484     481.333333
+464279           s1   464280    485     482.250000
+498745           s1   498746    489     483.600000
+649241           s1   649242    493     485.166667
+684429           s1   684430    489     485.714286
+921361           s1   921362    491     486.375000
+1317643          s1  1317644    494     487.222222
+1392061          s1  1392062    496     488.100000
+
+=== (c) 10-trade weighted moving averages ===
+(c) done in 15.70 s
+Head:
+        stocksymbol     time  price  quantity  ma_weighted
+27074            s1    27075    481      4494   481.000000
+199464           s1   199465    479      3297   480.153639
+389331           s1   389332    484      5606   481.763156
+464279           s1   464280    485      5312   482.682185
+498745           s1   498746    489      6419   484.296084
+649241           s1   649242    493      7914   486.380788
+684429           s1   684430    489       992   486.457131
+921361           s1   921362    491      3338   486.862892
+1317643          s1  1317644    494      6112   487.866066
+1392061          s1  1392062    496      9825   489.365173
+
+=== (d) Best buy-first/sell-later trade per stock ===
+/home/sr7463/Q1/analyze_trades.py:167: FutureWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  result = tmp.groupby("stocksymbol").apply(best_trade_for_stock)
+(d) done in 28.49 s
+Head:
+  stocksymbol  max_profit   buy_time  sell_time  buy_price  sell_price
+0          s1        19.0   199465.0  2854676.0      479.0       498.0
+1         s10        47.0    13296.0  2190025.0      313.0       360.0
+2        s100        33.0  2362013.0  9009249.0      407.0       440.0
+3       s1000        21.0   681498.0  3399711.0      410.0       431.0
+4      s10000        29.0  8659511.0  9961877.0       50.0        79.0
+[sr7463@access1 Q1]$ exit
+exit
+
+Script done on 2025-11-21 01:08:05-05:00 [COMMAND_EXIT_CODE="0"]
