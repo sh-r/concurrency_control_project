@@ -1,0 +1,20 @@
+// Test B — First-Committer-Wins Conflict
+// Test B: FCW write-write conflict on replicated variable
+begin(T1)
+begin(T2)
+W(T1, x2, 111)
+W(T2, x2, 222)
+end(T1)
+end(T2)
+dump()
+
+Expected Behavior:
+T1 and T2 both start before any writes.
+Both buffer writes to x2.
+end(T1) runs first:
+No prior writer committed after T1.start_time, so T1 commits.
+x2 becomes 111 on all up sites; version history updated.
+end(T2):
+Sees that x2 was already written by T1 with commit_time > T2.start_time.
+FCW rule causes T2 to abort with reason “first-committer-wins on x2 vs T1”.
+dump() shows x2 = 111 at all sites; no trace of 222.

@@ -1,0 +1,16 @@
+// Test A — Basic Commit, No Failures
+// Test A: Simple write and commit, no failures
+begin(T1)
+R(T1, x1)
+W(T1, x2, 999)
+end(T1)
+dump()
+
+Expected Behavior:
+T1 begins at time 1.
+R(T1, x1) reads the initial snapshot of x1 = 10 from its home site.
+W(T1, x2, 999) buffers a write to replicated variable x2 on all up sites.
+end(T1) passes FCW and available-copies rules (no other writers, no failures), so T1 commits.
+dump() prints all sites:
+All copies of x2 should now be 999.
+All other variables remain at their initial values.
